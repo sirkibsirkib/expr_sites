@@ -1,0 +1,11 @@
+[package]
+name = "expr_sites"
+version = "0.1.0"
+authors = ["sirkibsirkib <christopher.esterhuyse@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+crossbeam-utils = "0.8.5"
+maplit = "1.0.2"
+one_to_many_map = { git = "https://github.com/sirkibsirkib/one_to_many_map" }
+crossbeam-channel = "0.5"

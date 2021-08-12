@@ -1,0 +1,10 @@
+>> Starting with sid=SiteId(Id { bits: 1 })!
+>> Received some msg Copy { did: DataId(Id { bits: 9787720500395032303 }), data: [97, 114, 103, 32, 97] }
+>> Received some msg Copy { did: DataId(Id { bits: 4879076421922887157 }), data: [97, 114, 103, 32, 98] }
+>> Received some msg Copy { did: DataId(Id { bits: 12357958044258086211 }), data: [99, 111, 109, 112, 117, 116, 101, 32, 102] }
+>> Received some msg Compute { expr: ComputeWith([Data(DataId(Id { bits: 12357958044258086211 })), Data(DataId(Id { bits: 9787720500395032303 })), Data(DataId(Id { bits: 4879076421922887157 }))]) }
+>> Received some msg Copy { did: DataId(Id { bits: 16386333847527605397 }), data: [9, 5, 5] }
+>> computing expression with Eid ExprId(Id { bits: 16501572414124537155 })
+>> Result has did=DataId(Id { bits: 16386333847527605397 }) and data=[9, 5, 5]
+>> Taking a little sleep
+>> Taking a little sleep
