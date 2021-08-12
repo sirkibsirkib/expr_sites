@@ -54,7 +54,7 @@ trait Logger: std::fmt::Debug + Send {
     fn line_writer(&mut self) -> Option<&mut dyn Write>;
 }
 trait PolicyReasoner: Send {
-    fn may_send_to(&mut self, did: DataId, eids: &HashSet<ExprId>, sid: SiteId) -> bool;
+    fn may_access(&mut self, did: DataId, eids: &HashSet<ExprId>, sid: SiteId) -> bool;
     fn may_compute(&mut self, eid: ExprId, sid: SiteId) -> bool;
 }
 trait Network: Send {
@@ -121,19 +121,13 @@ fn main() {
     {
         let site = sites.get_mut(&SiteId(Id { bits: 0 })).unwrap();
         let a: Arc<Data> = (b"arg a" as &Data).into();
-        let b: Arc<Data> = (b"arg b" as &Data).into();
         let f: Arc<Data> = (b"compute f" as &Data).into();
 
         let did_a = site.add_data(a);
-        let did_b = site.add_data(b);
         let did_f = site.add_data(f);
 
-        let expr_fab = Arc::new(Expr::ComputeWith(vec![
-            Expr::Data(did_f),
-            Expr::Data(did_a),
-            Expr::Data(did_b),
-        ]));
-        let _eid_fab = site.add_expr(expr_fab);
+        let expr_fa = Arc::new(Expr::ComputeWith(vec![Expr::Data(did_f), Expr::Data(did_a)]));
+        let _eid_fa = site.add_expr(expr_fa);
     }
     crossbeam_utils::thread::scope(|s| {
         for site in sites.values_mut() {

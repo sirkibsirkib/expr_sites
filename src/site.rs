@@ -31,11 +31,12 @@ impl Site {
 
     pub fn add_data(&mut self, data: Arc<Data>) -> DataId {
         let did = DataId::new(&data);
-        let Self { did_to_data, reasoner, did_to_eid, network, .. } = self;
+        let Self { did_to_data, reasoner, did_to_eid, network, my_sid, .. } = self;
         did_to_data.entry(did).or_insert_with(|| {
             let msg = Msg::Copy { did, data: data.clone() };
             // ... send it to all peers who may receive it...
-            let mut send_pred = |sid| reasoner.may_send_to(did, did_to_eid.get_many(&did), sid);
+            let mut send_pred =
+                |sid| sid != *my_sid && reasoner.may_access(did, did_to_eid.get_many(&did), sid);
             network.send_to_where(&msg, &mut send_pred).unwrap();
             data
         });
