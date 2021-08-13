@@ -44,6 +44,11 @@ struct DataId(Id);
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 struct SiteId(Id);
 
+trait IdHashes {
+    type Id: Sized;
+    fn id_hash(&self) -> Self::Id;
+}
+
 #[derive(Debug, Clone)]
 enum Msg {
     Copy { did: DataId, data: Arc<Data> },
@@ -74,7 +79,7 @@ fn compute_fn(args: &[&Data]) -> Arc<Data> {
 struct Site {
     did_to_data: HashMap<DataId, Arc<Data>>,
     eid_to_children: HashMap<ExprId, Vec<ExprId>>,
-    did_to_eid: OneToManyMap<DataId, ExprId>,
+    did_to_eids: OneToManyMap<DataId, ExprId>,
     reasoner: Box<dyn PolicyReasoner>,
     logger: Box<dyn Logger>,
     network: Box<dyn Network>,
@@ -84,7 +89,43 @@ struct Site {
 
 /////////////////////////////////////////////////////
 
-fn sites_setup(site_log_names: &HashMap<SiteId, &'static str>) -> HashMap<SiteId, Site> {
+impl IdHashes for Data {
+    type Id = DataId;
+    fn id_hash(&self) -> Self::Id {
+        let mut h = DefaultHasher::default();
+        h.write_u8(b'D');
+        self.hash(&mut h);
+        DataId(Id { bits: h.finish() })
+    }
+}
+
+impl IdHashes for Expr {
+    type Id = ExprId;
+    fn id_hash(&self) -> Self::Id {
+        match self {
+            Expr::ExprId(eid) => *eid,
+            Expr::Data(did) => {
+                let mut h = DefaultHasher::default();
+                h.write_u64(did.0.bits);
+                h.write_u8(b'L'); // for 'leaf node'
+                ExprId(Id { bits: h.finish() })
+            }
+            Expr::ComputeWith(child_exprs) => {
+                let mut h = DefaultHasher::default();
+                for child_expr in child_exprs.iter() {
+                    h.write_u64(child_expr.id_hash().0.bits)
+                }
+                h.write_u8(b'I'); // for 'inner node'
+                ExprId(Id { bits: h.finish() })
+            }
+        }
+    }
+}
+
+fn sites_setup(
+    site_log_names: &HashMap<SiteId, &'static str>,
+    pri: &PolicyReasonerImpl,
+) -> HashMap<SiteId, Site> {
     let mut outboxes = Arc::new(HashMap::default());
     let outboxes_ref = Arc::get_mut(&mut outboxes).unwrap();
     let mut setups = HashMap::<SiteId, SiteSetup>::default();
@@ -101,7 +142,7 @@ fn sites_setup(site_log_names: &HashMap<SiteId, &'static str>) -> HashMap<SiteId
         .into_iter()
         .map(|(sid, SiteSetup { log_name, inbox })| {
             // ok
-            let reasoner: Box<dyn PolicyReasoner> = Box::new(PolicyReasonerImpl);
+            let reasoner: Box<dyn PolicyReasoner> = Box::new(pri.clone());
             let logger: Box<LoggerImpl> =
                 Box::new(LoggerImpl::new(&format!("./logs/{}", log_name)));
             let network = Box::new(NetworkImpl::new(outboxes.clone(), inbox));
@@ -112,26 +153,58 @@ fn sites_setup(site_log_names: &HashMap<SiteId, &'static str>) -> HashMap<SiteId
 }
 
 fn main() {
-    let site_log_names = maplit::hashmap! {
-        SiteId(Id { bits: 0 }) => "Amy",
-        SiteId(Id { bits: 1 }) => "Bob",
-        SiteId(Id { bits: 2 }) => "Cho",
-    };
-    let mut sites = sites_setup(&site_log_names);
-    {
-        let site = sites.get_mut(&SiteId(Id { bits: 0 })).unwrap();
-        let a: Arc<Data> = (b"arg a" as &Data).into();
-        let f: Arc<Data> = (b"compute f" as &Data).into();
-
-        let did_a = site.add_data(a);
-        let did_f = site.add_data(f);
-
-        let expr_fa = Arc::new(Expr::ComputeWith(vec![Expr::Data(did_f), Expr::Data(did_a)]));
-        let _eid_fa = site.add_expr(expr_fa);
+    const DATAS: [&Data; 2] = [b"arg a", b"compute f"];
+    const fn sid(bits: u64) -> SiteId {
+        SiteId(Id { bits })
     }
+    const AMY: SiteId = sid(0);
+    const BOB: SiteId = sid(1);
+    const CHO: SiteId = sid(2);
+    let site_log_names = maplit::hashmap! {
+        AMY => "Amy",
+        BOB => "Bob",
+        CHO => "Cho",
+    };
+    let did_a = DATAS[0].id_hash();
+    let did_f = DATAS[0].id_hash();
+    let expr_fa = Arc::new(Expr::ComputeWith(vec![Expr::Data(did_f), Expr::Data(did_a)]));
+    let eid_fa = expr_fa.id_hash();
+
+    let pri = Arc::new(PolicyReasonerImpl::new(
+        Arc::new(move |_did, _eids, _sid| {
+            // MAY ACCESS
+            // ok
+            true
+        }),
+        Arc::new(move |_eid, sid: SiteId| {
+            // MAY COMPUTE
+            sid == AMY
+            // true
+        }),
+    ));
+    let mut sites = sites_setup(&site_log_names, &pri);
+    sites.get_mut(&AMY).unwrap().add_data(DATAS[0].into());
+    sites.get_mut(&BOB).unwrap().add_data(DATAS[1].into());
+    sites.get_mut(&CHO).unwrap().add_expr(expr_fa);
+
     crossbeam_utils::thread::scope(|s| {
-        for site in sites.values_mut() {
-            s.spawn(move |_| site.execute());
+        for (sid, site) in sites.iter_mut() {
+            s.spawn(move |_| {
+                if sid == &AMY {
+                    loop {
+                        if let Some(&did) = site.eid_to_did(&eid_fa) {
+                            log!(site.logger_mut(), "AYYY did={:?}", did);
+                            println!("AMY GOT IT");
+                            break;
+                        }
+                        site.step();
+                    }
+                } else {
+                    loop {
+                        site.step()
+                    }
+                }
+            });
         }
     })
     .unwrap();
