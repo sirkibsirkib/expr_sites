@@ -2,6 +2,4 @@
 >> Sending to SiteId(Id { bits: 2 }) msg Copy { did: DataId(Id { bits: 12357958044258086211 }), data: [99, 111, 109, 112, 117, 116, 101, 32, 102] }
 >> Received some msg Copy { did: DataId(Id { bits: 9787720500395032303 }), data: [97, 114, 103, 32, 97] }
 >> Received some msg Compute { expr: ComputeWith([Data(DataId(Id { bits: 9787720500395032303 })), Data(DataId(Id { bits: 9787720500395032303 }))]) }
->> Taking a little sleep
 >> Received some msg Copy { did: DataId(Id { bits: 14694009460469802297 }), data: [5, 5] }
->> Taking a little sleep

@@ -187,25 +187,14 @@ fn main() {
     sites.get_mut(&BOB).unwrap().add_data(DATAS[1].into());
     sites.get_mut(&CHO).unwrap().add_expr(expr_fa);
 
-    crossbeam_utils::thread::scope(|s| {
-        for (sid, site) in sites.iter_mut() {
-            s.spawn(move |_| {
-                if sid == &AMY {
-                    loop {
-                        if let Some(&did) = site.eid_to_did(&eid_fa) {
-                            log!(site.logger_mut(), "AYYY did={:?}", did);
-                            println!("AMY GOT IT");
-                            break;
-                        }
-                        site.step();
-                    }
-                } else {
-                    loop {
-                        site.step()
-                    }
-                }
-            });
+    loop {
+        sites.values_mut().for_each(Site::step);
+
+        let amy = sites.get_mut(&AMY).unwrap();
+        if let Some(&did) = amy.eid_to_did(&eid_fa) {
+            log!(amy.logger_mut(), "AYYY did={:?}", did);
+            println!("AMY GOT IT");
+            return;
         }
-    })
-    .unwrap();
+    }
 }
