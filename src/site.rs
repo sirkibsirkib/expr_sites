@@ -1,6 +1,9 @@
 use super::*;
 
 impl Site {
+    const COMPUTE_STALL_PERIOD: Duration = Duration::from_millis(300);
+    const MAINTAINANCE_PERIOD: Duration = Duration::from_millis(900);
+
     pub fn new(
         reasoner: Box<dyn PolicyReasoner>,
         logger: Box<dyn Logger>,
@@ -17,6 +20,7 @@ impl Site {
             network,
             compute_fn,
             my_sid,
+            next_maintainance_at: Instant::now(),
         }
     }
 
@@ -108,7 +112,42 @@ impl Site {
         }
     }
 
+    fn maybe_maintain(&mut self) {
+        let now = Instant::now();
+        if self.next_maintainance_at < now {
+            self.next_maintainance_at = now + Self::MAINTAINANCE_PERIOD;
+
+            // discard all assets we may no longer store
+            let Self { did_to_data, did_to_eids, logger, my_sid, reasoner, .. } = self;
+            did_to_data.retain(|did, _data| {
+                // wah
+                let may_access = reasoner.may_access(*did, did_to_eids.get_many(did), *my_sid);
+                if !may_access {
+                    log!(logger, "Dropping did={:?}", did);
+                }
+                may_access
+            });
+        }
+    }
+
     pub fn step(&mut self) {
+        // handle all incoming messages
+        while let Some(msg) = self.network.try_recv() {
+            log!(self.logger, "Received some msg {:?}", msg);
+            match msg {
+                Msg::Compute { expr } => {
+                    self.add_replicated_expr(&expr);
+                }
+                Msg::DidToEid { did, eid } => {
+                    self.did_to_eids.insert(did, eid).unwrap();
+                }
+                Msg::Copy { did, data } => {
+                    self.did_to_data.insert(did, data);
+                }
+            }
+        }
+
+        self.maybe_maintain();
         // let's try and compute everything we can
         let Self {
             did_to_eids, eid_to_children, did_to_data, reasoner, my_sid, compute_fn, ..
@@ -153,28 +192,8 @@ impl Site {
                 return;
             }
         }
-
-        // handle all ready messages
-        let mut recvd_one = false;
-        while let Some(msg) = self.network.try_recv() {
-            log!(self.logger, "Received some msg {:?}", msg);
-            recvd_one = true;
-            match msg {
-                Msg::Compute { expr } => {
-                    self.add_replicated_expr(&expr);
-                }
-                Msg::DidToEid { did, eid } => {
-                    self.did_to_eids.insert(did, eid).unwrap();
-                }
-                Msg::Copy { did, data } => {
-                    self.did_to_data.insert(did, data);
-                }
-            }
-        }
-        if !recvd_one {
-            log!(self.logger, "Taking a little sleep");
-            // let's take a breather before we continue working. don't want to spinlock!
-            std::thread::sleep(TIMEOUT_DURATION);
-        }
+        log!(self.logger, "Taking a little sleep");
+        // let's take a breather before we continue working. don't want to spinlock!
+        std::thread::sleep(Self::COMPUTE_STALL_PERIOD);
     }
 }

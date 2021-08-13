@@ -10,7 +10,7 @@ use std::{
     io::Write,
     path::Path,
     sync::Arc,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 #[macro_use]
@@ -20,8 +20,6 @@ mod logger;
 mod network;
 mod policy_reasoner;
 mod site;
-
-const TIMEOUT_DURATION: Duration = Duration::from_secs(1);
 
 #[derive(Debug, Clone)]
 enum Expr {
@@ -86,6 +84,7 @@ struct Site {
     network: Box<dyn Network>,
     compute_fn: fn(&[&Data]) -> Arc<Data>,
     my_sid: SiteId,
+    next_maintainance_at: Instant,
 }
 
 struct ExprChildren {
