@@ -52,6 +52,7 @@ trait IdHashes {
 #[derive(Debug, Clone)]
 enum Msg {
     Copy { did: DataId, data: Arc<Data> },
+    DidToEid { did: DataId, eid: ExprId },
     Compute { expr: Arc<Expr> },
 }
 
@@ -171,21 +172,21 @@ fn main() {
     let eid_fa = expr_fa.id_hash();
 
     let pri = Arc::new(PolicyReasonerImpl::new(
-        Arc::new(move |_did, _eids, _sid| {
+        Arc::new(move |did, eids, sid| {
             // MAY ACCESS
-            // ok
-            true
+            (sid == AMY && (did == did_a || eids.contains(&eid_fa))) // amy
+            || sid == BOB // bob
+            || (sid == CHO && did == did_a)
         }),
-        Arc::new(move |_eid, sid: SiteId| {
+        Arc::new(move |eid, sid: SiteId| {
             // MAY COMPUTE
-            sid == AMY
-            // true
+            sid == BOB && eid == eid_fa
         }),
     ));
     let mut sites = sites_setup(&site_log_names, &pri);
     sites.get_mut(&AMY).unwrap().add_data(DATAS[0].into());
-    sites.get_mut(&BOB).unwrap().add_data(DATAS[1].into());
-    sites.get_mut(&CHO).unwrap().add_expr(expr_fa);
+    sites.get_mut(&BOB).unwrap().add_expr(expr_fa);
+    sites.get_mut(&CHO).unwrap().add_data(DATAS[1].into());
 
     loop {
         sites.values_mut().for_each(Site::step);

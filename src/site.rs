@@ -20,10 +20,6 @@ impl Site {
         }
     }
 
-    pub fn try_get_data(&self, did: &DataId) -> Option<&Arc<Data>> {
-        self.did_to_data.get(did)
-    }
-
     pub fn logger_mut(&mut self) -> &mut dyn Logger {
         &mut *self.logger
     }
@@ -32,25 +28,38 @@ impl Site {
         self.did_to_eids.get_one(eid)
     }
 
+    // this is what the user calls
     pub fn add_data(&mut self, data: Arc<Data>) -> DataId {
         let did = data.id_hash();
         let Self { logger, did_to_data, reasoner, did_to_eids, network, my_sid, .. } = self;
-        did_to_data.entry(did).or_insert_with(|| {
-            let msg = Msg::Copy { did, data: data.clone() };
+        if did_to_data.contains_key(&did) {
+            log!(logger, "Already got this data, thanks. Did={:?}", did);
+        } else {
+            let eid = Expr::Data(did).id_hash();
+            did_to_eids.insert(did, eid).unwrap();
+            if reasoner.may_access(did, did_to_eids.get_many(&did), *my_sid) {
+                did_to_data.insert(did, data.clone());
+            } else {
+                log!(logger, "OOh crikey I am not allowed to have this data! did={:?}", did);
+            }
+            let msgs = [Msg::Copy { did, data }, Msg::DidToEid { did, eid }];
             // ... send it to all peers who may receive it...
-            let mut send_pred = |sid| {
-                let do_send =
-                    sid != *my_sid && reasoner.may_access(did, did_to_eids.get_many(&did), sid);
-                if do_send {
-                    log!(logger, "Sending to {:?} msg {:?}", sid, msg);
-                }
-                do_send
-            };
-            network.send_to_where(&msg, &mut send_pred).unwrap();
-            data
-        });
+            for msg in msgs.iter() {
+                let mut send_pred = |sid| {
+                    let do_send =
+                        sid != *my_sid && reasoner.may_access(did, did_to_eids.get_many(&did), sid);
+                    if do_send {
+                        log!(logger, "Sending to {:?} msg {:?}", sid, msg);
+                    }
+                    do_send
+                };
+                network.send_to_where(&msg, &mut send_pred).unwrap();
+            }
+        }
         did
     }
+
+    // This is what the user calls
     pub fn add_expr(&mut self, expr: Arc<Expr>) -> ExprId {
         // replicate this call at peer sites
         let msg = Msg::Compute { expr: expr.clone() };
@@ -125,8 +134,20 @@ impl Site {
                 // ... compute this result...
                 let data = (compute_fn)(&child_datas);
                 let did = self.add_data(data.clone());
-                self.did_to_eids.insert(did, parent_eid).unwrap();
-                log!(self.logger, "Result has did={:?} and data={:?}", did, &data);
+                let msg = Msg::DidToEid { did, eid: parent_eid };
+                let Self { network, logger, did_to_eids, my_sid, .. } = self;
+                network
+                    .send_to_where(&msg, &mut |sid| {
+                        let do_send = sid != *my_sid;
+                        if do_send {
+                            log!(logger, "Sending to {:?} msg {:?}", sid, msg);
+                        }
+                        do_send
+                    })
+                    .unwrap();
+                did_to_eids.insert(did, parent_eid).unwrap();
+
+                log!(logger, "Result has did={:?} and data={:?}", did, &data);
                 // // Let's reconsider all compute steps. New things may be possible
                 return;
             }
@@ -140,6 +161,9 @@ impl Site {
             match msg {
                 Msg::Compute { expr } => {
                     self.add_replicated_expr(&expr);
+                }
+                Msg::DidToEid { did, eid } => {
+                    self.did_to_eids.insert(did, eid).unwrap();
                 }
                 Msg::Copy { did, data } => {
                     self.did_to_data.insert(did, data);
