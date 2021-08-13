@@ -1,8 +1,8 @@
 >> OOh crikey I am not allowed to have this data! did=DataId(Id { bits: 12357958044258086211 })
 >> Sending to SiteId(Id { bits: 1 }) msg Copy { did: DataId(Id { bits: 12357958044258086211 }), data: [99, 111, 109, 112, 117, 116, 101, 32, 102] }
 >> Sending to SiteId(Id { bits: 1 }) msg DidToEid { did: DataId(Id { bits: 12357958044258086211 }), eid: ExprId(Id { bits: 14594234967190954595 }) }
->> Received some msg Copy { did: DataId(Id { bits: 9787720500395032303 }), data: [97, 114, 103, 32, 97] }
->> Received some msg DidToEid { did: DataId(Id { bits: 9787720500395032303 }), eid: ExprId(Id { bits: 2773870878919738492 }) }
->> Received some msg Compute { expr: ComputeWith([Data(DataId(Id { bits: 9787720500395032303 })), Data(DataId(Id { bits: 9787720500395032303 }))]) }
+>> Received some msg Copy { did: DataId(Id { bits: 2748217731323604513 }), data: [97, 97, 97] }
+>> Received some msg DidToEid { did: DataId(Id { bits: 2748217731323604513 }), eid: ExprId(Id { bits: 8176513733833999787 }) }
+>> Received some msg Compute { expr: ComputeWith([Data(DataId(Id { bits: 2748217731323604513 })), Data(DataId(Id { bits: 2748217731323604513 }))]) }
 >> Taking a little sleep
->> Received some msg DidToEid { did: DataId(Id { bits: 14694009460469802297 }), eid: ExprId(Id { bits: 736498403709536448 }) }
+>> Received some msg DidToEid { did: DataId(Id { bits: 7988550387315889014 }), eid: ExprId(Id { bits: 8523556252831570235 }) }

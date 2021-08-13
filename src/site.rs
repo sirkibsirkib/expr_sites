@@ -42,19 +42,17 @@ impl Site {
             } else {
                 log!(logger, "OOh crikey I am not allowed to have this data! did={:?}", did);
             }
-            let msgs = [Msg::Copy { did, data }, Msg::DidToEid { did, eid }];
+            let msg = Msg::Copy { did, data };
             // ... send it to all peers who may receive it...
-            for msg in msgs.iter() {
-                let mut send_pred = |sid| {
-                    let do_send =
-                        sid != *my_sid && reasoner.may_access(did, did_to_eids.get_many(&did), sid);
-                    if do_send {
-                        log!(logger, "Sending to {:?} msg {:?}", sid, msg);
-                    }
-                    do_send
-                };
-                network.send_to_where(&msg, &mut send_pred).unwrap();
-            }
+            let mut send_pred = |sid| {
+                let do_send =
+                    sid != *my_sid && reasoner.may_access(did, did_to_eids.get_many(&did), sid);
+                if do_send {
+                    log!(logger, "Sending to {:?} msg {:?}", sid, msg);
+                }
+                do_send
+            };
+            network.send_to_where(&msg, &mut send_pred).unwrap();
         }
         did
     }
@@ -92,17 +90,19 @@ impl Site {
             }
             Expr::ComputeWith(child_exprs) => {
                 let mut h = DefaultHasher::default();
-                let child_eids = child_exprs
-                    .iter()
-                    .map(|eid| {
-                        let child_eid = self.add_replicated_expr(eid);
-                        h.write_u64(child_eid.0.bits);
-                        child_eid
-                    })
-                    .collect();
+                let children = ExprChildren {
+                    child_eids: child_exprs
+                        .iter()
+                        .map(|eid| {
+                            let child_eid = self.add_replicated_expr(eid);
+                            h.write_u64(child_eid.0.bits);
+                            child_eid
+                        })
+                        .collect(),
+                };
                 h.write_u8(b'I'); // for 'inner node'
                 let eid = ExprId(Id { bits: h.finish() });
-                self.eid_to_children.insert(eid, child_eids);
+                self.eid_to_children.insert(eid, children);
                 eid
             }
         }
@@ -113,13 +113,14 @@ impl Site {
         let Self {
             did_to_eids, eid_to_children, did_to_data, reasoner, my_sid, compute_fn, ..
         } = self;
-        for (&parent_eid, child_eids) in eid_to_children {
+        for (&parent_eid, children) in eid_to_children {
             // ... whose expr is not associated with data...
             if did_to_eids.get_one(&parent_eid).is_some() {
                 continue;
             }
             // ... whose inputs have known data ...
-            if let Some(child_datas) = child_eids
+            if let Some(child_datas) = children
+                .child_eids
                 .iter()
                 .map(|e| {
                     did_to_eids.get_one(e).and_then(|did| did_to_data.get(did).map(AsRef::as_ref))

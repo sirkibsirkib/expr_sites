@@ -79,7 +79,7 @@ fn compute_fn(args: &[&Data]) -> Arc<Data> {
 
 struct Site {
     did_to_data: HashMap<DataId, Arc<Data>>,
-    eid_to_children: HashMap<ExprId, Vec<ExprId>>,
+    eid_to_children: HashMap<ExprId, ExprChildren>,
     did_to_eids: OneToManyMap<DataId, ExprId>,
     reasoner: Box<dyn PolicyReasoner>,
     logger: Box<dyn Logger>,
@@ -88,8 +88,22 @@ struct Site {
     my_sid: SiteId,
 }
 
-/////////////////////////////////////////////////////
+struct ExprChildren {
+    child_eids: Vec<ExprId>,
+}
 
+/////////////////////////////////////////////////////
+impl IdHashes for ExprChildren {
+    type Id = ExprId;
+    fn id_hash(&self) -> Self::Id {
+        let mut h = DefaultHasher::default();
+        for child_eid in self.child_eids.iter() {
+            h.write_u64(child_eid.0.bits)
+        }
+        h.write_u8(b'I'); // for 'inner node'
+        ExprId(Id { bits: h.finish() })
+    }
+}
 impl IdHashes for Data {
     type Id = DataId;
     fn id_hash(&self) -> Self::Id {
@@ -154,7 +168,7 @@ fn sites_setup(
 }
 
 fn main() {
-    const DATAS: [&Data; 2] = [b"arg a", b"compute f"];
+    const DATAS: [&Data; 2] = [b"aaa", b"compute f"];
     const fn sid(bits: u64) -> SiteId {
         SiteId(Id { bits })
     }
